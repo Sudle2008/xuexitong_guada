@@ -1,6 +1,9 @@
-# 忽略一切，仅保留说明文档
-# 本仓库不含任何个人信息、账号凭证、课程或题目内容
+# 忽略一切；仅放行说明文档与「脱敏后的主引擎」
+# 任何个人信息（账号/Cookie/课程编号/题目/答案/日志）都必须留在版本库之外
 
 *
 !.gitignore
 !README.md
+!scripts/
+scripts/*
+!scripts/required_walker.py

@@ -1,7 +1,8 @@
 # 学习通挂答一体化工具（骨架说明）
 
-> 本仓库**只包含这份说明文档**。
-> 所有运行数据（登录凭证、课程信息、题目与答案、日志）都不入库，也不应提交。
+> 本仓库只包含两样东西：**这份说明** 和 **脱敏后的主引擎脚本 `scripts/required_walker.py`**。
+> 引擎不内置任何账号、课程编号、平台域名或本机路径——这些全部放在工作目录（不入库），
+> 由脚本运行时读取。
 
 ## 1. 这个工具能做什么
 
@@ -13,7 +14,7 @@
 | 视频任务点 | 无头浏览器打开播放页，自动播放至结束，支持倍速 |
 | 文档任务点 | 通过平台文档任务点接口自动标记完成 |
 | 章节测验 | 拉到题目后写出待答文件，外部给出答案后自动勾选/填写作答并提交 |
-| 字体加密题 | 平台会用自定义字体混淆题干与选项，脚本渲染「序号-汉字」对照表，供解码还原明文 |
+| 字体加密题 | 平台用自定义字体混淆题干与选项，脚本渲染「序号-汉字」对照表，供外部解码还原明文 |
 | 断点续跑 | 进度写入状态文件，进程中断后重启会从下一个未完成小节继续 |
 | 异常自愈 | 网络抖动退出可重启续跑；「上一节已通过但未解锁」会重载核对，必要时重播未登记的视频 |
 
@@ -21,14 +22,15 @@
 
 ## 2. 需要自己准备哪些信息（以及放在哪）
 
-脚本不内置任何账号或课程信息，运行前需在工作目录（下称 `WORKDIR`）准备：
+引擎通过 `--workdir`（或环境变量 `XXW_WORKDIR`）指向工作目录 `WORKDIR`，运行前需在其中准备：
 
 ```
 WORKDIR/
-├── cookies.txt             # 登录后的浏览器 Cookie（Netscape 格式）
-├── course_config.json      # 课程标识：courseid / clazzid 等
-├── required_leaves.json    # 要遍历的小节清单 [{"id": "<知识点id>", "name": "<小节名>"}]
+├── cookies.txt             # 登录后的浏览器 Cookie（Netscape 格式或 name=value 串）【必填】
+├── course_config.json      # 课程上下文【必填】
+├── required_leaves.json    # 要遍历的小节清单 [{"id": "<知识点id>", "name": "<小节名>"}]【必填】
 ├── required_state.json     # 进度状态（可不存在，首次运行会新建）
+├── font_map.json           # 可选：历史字体映射（码点十进制 -> 汉字），用于解码旧题
 ├── pending_quiz.json       # 运行中生成：当前待答题目
 ├── font_grid_pending.html/.png  # 运行中生成：字体对照表
 └── quiz_answers.json       # 由外部写入：答案文件
@@ -36,12 +38,20 @@ WORKDIR/
 
 **放入方式**
 
-1. `cookies.txt`：在浏览器登录后，用插件导出 Netscape 格式 Cookie，存为文本即可。
-2. `course_config.json`：从课程页面地址栏取课程与班级编号，写成 JSON：
+1. `cookies.txt`：浏览器登录后用插件导出，存为文本即可。
+2. `course_config.json`：从课程页面地址栏取编号、从站点地址取域名，写成 JSON（值替换成你自己的）：
    ```json
-   { "courseid": "<课程编号>", "clazzid": "<班级编号>" }
+   {
+     "courseId": 0,
+     "clazzId": 0,
+     "domain": "你的慕课平台域名",
+     "cpi": 0,
+     "cookie_domains": [".你的平台域名"]
+   }
    ```
-3. `required_leaves.json`：按章节树整理要做的知识点 id 与名称，顺序即执行顺序。
+   - `courseId` / `clazzId` / `domain` 必填；`cpi`、`cookie_domains` 可选（Cookie 域缺省为 `[".chaoxing.com"]`）。
+   - 缺少这三项时脚本会直接报错退出，不会带任何默认值。
+3. `required_leaves.json`：按章节树整理知识点 id 与名称，顺序即执行顺序。
 4. 其余文件不用手工创建。
 
 > 上述文件都属于个人信息/课程数据，**只能放在本机工作目录**，不要提交到任何仓库或分享出去。
@@ -49,15 +59,16 @@ WORKDIR/
 ## 3. 如何使用
 
 ```powershell
-# 一次运行（后台常驻建议用计划任务或终端后台方式启动）
 python scripts/required_walker.py --workdir "<WORKDIR>" --rate 2 --quiz-wait-min 90
 ```
+
+`--workdir` 必填（或设置环境变量 `XXW_WORKDIR`）；无头浏览器路径可用环境变量 `XXW_CHROME` 覆盖（默认系统 Chrome）。
 
 常用参数：
 
 | 参数 | 作用 |
 | --- | --- |
-| `--workdir` | 工作目录（放上面那些输入文件的地方） |
+| `--workdir` | 工作目录（放上面那些输入文件的地方），必填 |
 | `--rate` | 视频播放倍速，默认 2 |
 | `--quiz-wait-min` | 出题后等待答案文件的最长分钟数 |
 | `--no-recheck-prev` | 未解锁时不回看上一节页面（避免重复访问旧内容） |
@@ -79,18 +90,19 @@ python scripts/required_walker.py --workdir "<WORKDIR>" --rate 2 --quiz-wait-min
    ```
 4. 提交返回 `stuStatus=4` 为通过；`stuStatus=5` 表示未达线/有错题，需要定位错题、修正答案并把该小节从完成清单里移除后重跑。
 
-## 5. 目录说明
+## 5. 目录与入库说明
 
 ```
-scripts/           运行脚本（遍历、答题、渲染对照表等）
-data/              工作区，用来放 WORKDIR
-run.py             可选的一键入口
+scripts/required_walker.py   # 主引擎（入库，已脱敏：无任何账号/课程/域名/路径）
+scripts/其余脚本与 run.py     # 开发期一次性工具，仅本地保留，不入库
+data/                        # 本地工作区（放 WORKDIR），不入库
+cookies.txt 等               # 运行数据，不入库
 ```
 
 ## 6. 使用须知
 
 - 仅用于自己已选课程的学习记录维护，请遵守所在平台的使用条款与学校规定。
-- 脚本依赖本机 Python 与 Playwright/Chromium（或无头 Chrome）。
-- 仓库内不含任何账号、Cookie、课程编号、题目与答案；如要交流，只分享代码与本文档。
+- 脚本依赖本机 Python 与 Playwright（或无头 Chrome）。
+- 仓库内不含任何账号、Cookie、课程编号、域名与题目答案；引擎脚本所有课程参数都来自被忽略的工作目录配置。
 
 > AI生成
