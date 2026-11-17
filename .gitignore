@@ -4,6 +4,7 @@
 *
 !.gitignore
 !README.md
+!LICENSE
 !scripts/
 scripts/*
 !scripts/required_walker.py
