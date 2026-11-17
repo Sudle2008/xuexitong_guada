@@ -132,7 +132,7 @@ def video_state(html):
 
 def video_states(html):
     """返回该卡内全部视频附件 (objectId, duration, job, isPassed) 列表。
-    一张卡片可能内嵌多个 insertvideo 视频(如 1.2.7 有3个), 只返回第一个会漏放。"""
+    一张卡片可能内嵌多个 insertvideo 视频, 只返回第一个会漏放。"""
     marg = parse_marg(html)
     if not marg:
         return []
@@ -214,7 +214,7 @@ def find_video_frame(page, timeout_ms=15000):
     return None
 
 def find_video_frame_at(page, idx, timeout_ms=15000):
-    """返回第 idx 个(0-based)含 <video> 的子 frame。用于单卡多视频场景(如 1.2.7 有3个视频)。"""
+    """返回第 idx 个(0-based)含 <video> 的子 frame。用于单卡多视频场景。"""
     deadline = time.time() + timeout_ms / 1000.0
     while time.time() < deadline:
         found = 0
@@ -604,7 +604,7 @@ def main():
                         leaf_ok = False
                     else:
                         # 题目在 iframe 内 XHR 异步加载, 首次提取可能为空 ->
-                        # 重试提取, 避免把「加载中」误判为「已提交过」(1.2.7 实测踩坑)
+                        # 重试提取, 避免把「加载中」误判为「已提交过」
                         qs = []
                         for _ext in range(5):
                             qs = extract_questions(fr)
