@@ -7,7 +7,7 @@
 ## Project overview
 
 - 仓库内容：`README.md`（机制说明）、`AGENTS.md`（本文件）、脱敏主引擎 `scripts/required_walker.py`。
-- 目标：替用户按顺序完成一门超星/学习通课程的**必修小节**——真实播放视频 → 完成文档任务点 → 测验出题后由你作答 → 提交 → 解锁下一节，直到全部完成或无法继续。
+- 目标：替用户按顺序完成一门超星/学习通课程中**用户确认的小节清单**——真实播放视频 → 完成文档任务点 → 测验出题后由你作答 → 提交 → 解锁下一节，直到全部完成或无法继续。
 - 引擎**不会产生答案**；不含任何账号/课程编号/域名/路径，全部配置来自 `--workdir` 指向的工作目录（不入库）。
 - 全程无头运行，不弹任何窗口。
 
@@ -61,9 +61,10 @@ python scripts\required_walker.py --help    # 自检：能打印参数说明即�
 
 提问模板：
 
-> 我数出这门课必修共 N 个小节（从「1.1.1 xxx」到「x.x.x xxx」）。按顺序全部做完吗？有没有要跳过的节？
+> 我从章节树解析到 N 个小节（首节「1.1.1 xxx」、末节「x.x.x xxx」）。按顺序全部做完吗？有没有要跳过的节？
 > 可以夜间连续跑吗？最长跑到什么时候 / 停在哪一节就停？
 
+- 小节清单里**包含页面上的全部分支**（有的课程会分成多个部分，不同课程的分法不一样），做哪些由用户在这里确认；确认后你把不做的小节从清单里删掉再交给引擎。
 - 和用户定好**明确停止条件**（全部完成 / 停在某节 / 时长上限），之后连续运行、少打扰，只在出题和卡住时联系用户。
 - 防风控常识（转告用户）：单日 ≤8 小时、深夜勿高频、期间别在另一设备同时学同一门课。
 
@@ -139,7 +140,7 @@ out.write_text(html, encoding='utf-8')
 print('OK %d bytes -> %s' % (len(html), out))
 ```
 
-**第二步**：解析成清单。存成 `.temp\parse_leaves.py` 跑（已实测：对真实章节树解析结果与人工核对清单逐项一致）：
+**第二步**：解析成清单。存成 `.temp\parse_leaves.py` 跑（已实测：真实章节树上解析无遗漏、顺序与页面一致）：
 
 ```python
 # 用法: python parse_leaves.py <章节树.html> <输出required_leaves.json>
@@ -147,7 +148,6 @@ import re, sys, json
 from pathlib import Path
 
 html = Path(sys.argv[1]).read_text(encoding='utf-8')
-pos_req, pos_ele = html.find('必修部分'), html.find('选修部分')
 # id 与 class 之间可能跨行换行(四级节点)，属性间用 [^>]* 兼容
 items = list(re.finditer(r'<div\s+class="chapter_item"[^>]*?id="cur(\d+)"[^>]*>', html))
 nodes = []
@@ -163,10 +163,9 @@ for k, im in enumerate(items):
         ta = re.search(r'title="([^"]*)"', im.group(0))
         name = ta.group(1).strip() if ta else ''
     nodes.append((im.start(), im.group(1), name))
-scope = nodes if (pos_req < 0 or pos_ele < 0) else \
-        [(p, c, n) for p, c, n in nodes if pos_req < p < pos_ele]
-pos_map = {c: p for p, c, _ in scope}
-leaves = [{'id': c, 'name': n} for p, c, n in scope if re.match(r'^\d+\.\d+\.\d+', n)]
+pos_map = {c: p for p, c, _ in nodes}
+# 叶子判定：名称带两级以上编号前缀(如 1.1.1)；章/节这类无编号前缀的中间节点自动排除
+leaves = [{'id': c, 'name': n} for p, c, n in nodes if re.match(r'^\d+\.\d+\.\d+', n)]
 leaves.sort(key=lambda x: pos_map[x['id']])
 Path(sys.argv[2]).write_text(json.dumps(leaves, ensure_ascii=False, indent=2), encoding='utf-8')
 print('叶子 %d 个: %s ... %s' % (len(leaves),
@@ -177,7 +176,8 @@ print('叶子 %d 个: %s ... %s' % (len(leaves),
 
 - 抓不到章节树（`未找到章节树`）时才追问用户：
   > 请在那个章节页面：右键 →「查看网页源代码」，把内容全选复制发我（太长就存成 .txt/.html 文件发我）。
-- 页面没有「必修部分 / 选修部分」标记时，脚本会把全部节点当必修——**必须**把小节数量和首末节名报给用户确认范围。
+- 清单会包含**页面上所有**带编号前缀的叶子小节（各课程的分支划分不一样，脚本不预设）；做哪些由用户在提问 3 确认，确认后把不做的从 JSON 里删掉（保持顺序）再写盘。
+- 叶子判定按名称的编号前缀（如 1.1.1、1.3.2.1）；个别课程命名不带这种前缀时，把解析出的节点清单给用户确认后再定。
 - 抓取这一步同时验证了 Cookie 有效性：能解析出章节树 = Cookie 可用。
 - 解析结果连同数量、首末节名一起向用户确认后再进入下一步。
 
@@ -263,7 +263,7 @@ Test-Path "<WORKDIR>\pending_quiz.json"    # 出现 = 有测验在等你答案
 
 - 节奏：每完成 5～10 节、或出阻塞、或需要用户作答/确认时简报；其余时间安静跑。
 - 模板：`已完成 X/N 节（当前到「x.x.x xxx」）；视频 M 个、测验提交 K 次；异常：……；下一步：……`
-- 全部完成：`必修 N/N 完成；视频共 M、测验提交共 K；进度文件在 <WORKDIR>\required_state.json`。
+- 全部完成：`清单 N/N 完成；视频共 M、测验提交共 K；进度文件在 <WORKDIR>\required_state.json`。
 
 ## Security rules（红线）
 
@@ -271,7 +271,7 @@ Test-Path "<WORKDIR>\pending_quiz.json"    # 出现 = 有测验在等你答案
 - 不修改引擎代码。发现 bug 报告用户；要改须用户确认，改完先做语法校验与试跑，经确认再正式运行。
 - 不同时开多个挂机端跑同一账号；不与用户手机端同时学同一门课。
 - 中断安全：随时可停（Ctrl+C / 结束进程），进度在 `required_state.json`，重启同命令自动续跑。
-- 完成判定：日志 `=== 必修全部叶子处理完成 ===` + 统计行，或 `doneLeaves` 数 = 清单数。
+- 完成判定：`doneLeaves` 数 = 清单数（引擎结束时会打印完成与统计行）。
 
 ## Quick answers（用户常见问题速答）
 
