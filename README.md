@@ -1,6 +1,7 @@
 # 学习通挂答一体化工具（骨架说明）
 
-> 本仓库只包含两样东西：**这份说明** 和 **脱敏后的主引擎脚本 `scripts/required_walker.py`**。
+> 本仓库只包含三样东西：**这份说明**、**AI 代理指引 [`AGENTS.md`](AGENTS.md)** 和 **脱敏后的主引擎脚本 `scripts/required_walker.py`**。
+> 使用者**无需**通读本 README——把仓库交给 AI，它会读 `AGENTS.md`，按其提问提供信息即可。
 > 引擎不内置任何账号、课程编号、平台域名或本机路径——这些全部放在工作目录（不入库），
 > 由脚本运行时读取。
 
@@ -57,6 +58,9 @@ WORKDIR/
 > 上述文件都属于个人信息/课程数据，**只能放在本机工作目录**，不要提交到任何仓库或分享出去。
 
 ## 3. 如何使用
+
+> 推荐路径：把仓库交给 AI，让它读 **[`AGENTS.md`](AGENTS.md)**——它会向你索取 Cookie 与课程链接，并代为生成配置、启动与答题。
+> 本节命令供手动/高级使用。
 
 ```powershell
 python scripts/required_walker.py --workdir "<WORKDIR>" --rate 2 --quiz-wait-min 90
@@ -177,6 +181,7 @@ python scripts/required_walker.py --workdir "<WORKDIR>" --rate 2 --quiz-wait-min
 
 ```
 scripts/required_walker.py   # 主引擎（入库，已脱敏：无任何账号/课程/域名/路径）
+AGENTS.md                   # AI 代理操作指引（入库：提问模板/配置生成/运行循环）
 scripts/其余脚本与 run.py     # 开发期一次性工具，仅本地保留，不入库
 data/                        # 本地工作区（放 WORKDIR），不入库
 cookies.txt 等               # 运行数据，不入库
