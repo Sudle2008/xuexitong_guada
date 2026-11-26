@@ -142,6 +142,8 @@ python scripts/required_walker.py --workdir "<WORKDIR>" --rate 2 --quiz-wait-min
 
 形近字建议逐行放大复核；识别错误会导致整题答错（平台会判错但不会告知正确答案）。
 
+> **备选取题路径**：除读取上述落盘文件外，AI 主动工作时也可选择直接在无头浏览器中打开测验页、截图后 OCR 识别题目并作答——此前的实战即采用此方式。两条路径等价，任选其一。
+
 ### 4.4 答案文件格式：quiz_answers.json（作答者写入，键为 qid）
 
 ```json
